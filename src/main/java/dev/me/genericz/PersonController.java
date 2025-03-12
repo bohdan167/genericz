@@ -64,6 +64,15 @@ class PersonController {
         }
     }
 
+    @DeleteMapping("/{id}")
+    private ResponseEntity<Void> deletePerson(@PathVariable Long id) {
+        if (personRepository.findById(id).isPresent()) {
+            personRepository.deleteById(id);
+            return ResponseEntity.noContent().build();
+        }
+        return ResponseEntity.notFound().build();
+    }
+
     private Optional<Person> findPerson(Long id) {
         return personRepository.findById(id);
     }
