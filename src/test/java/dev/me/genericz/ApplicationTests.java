@@ -7,6 +7,8 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.annotation.DirtiesContext;
@@ -73,7 +75,7 @@ class ApplicationTests {
 		assertThat(id).isNotNull();
 
 		String name = documentContext.read("$.name", String.class);
-		assertThat(name).isEqualTo(name);
+		assertThat(name).isEqualTo("John");
 	}
 
 	@Test
@@ -148,4 +150,45 @@ class ApplicationTests {
 				.getForEntity("/persons/100", String.class);
 		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.UNAUTHORIZED);
 	}
+
+	@Test
+	void shouldRejectUsersWhoAreNotAdmins() {
+		Person newPerson = new Person(null, "John", 30, "john");
+		ResponseEntity<Void> response = restTemplate
+				.withBasicAuth("alice", "abc123")
+				.postForEntity("/persons", newPerson, Void.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.FORBIDDEN);
+	}
+
+	@Test
+	@DirtiesContext
+	void shouldUpdateAnExistingPerson() {
+		Person personUpdate = new Person(null, "Alice", 21, "alice");
+		HttpEntity<Person> request = new HttpEntity<>(personUpdate);
+		ResponseEntity<Void> response = restTemplate
+				.withBasicAuth("admin", "admin123")
+				.exchange("/persons/100", HttpMethod.PUT, request, Void.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+		ResponseEntity<String> getResponse = restTemplate
+				.withBasicAuth("admin", "admin123")
+				.getForEntity("/persons/100", String.class);
+		assertThat(getResponse.getStatusCode()).isEqualTo(HttpStatus.OK);
+		DocumentContext documentContext = JsonPath.parse(getResponse.getBody());
+		Number id = documentContext.read("$.id");
+		Number age = documentContext.read("$.age");
+		assertThat(id).isEqualTo(100);
+		assertThat(age).isEqualTo(21);
+	}
+
+	@Test
+	void shouldNotUpdateAPersonThatDoesNotExist() {
+		Person unknownPerson = new Person(null, "Sarah", 19, "sarah");
+		HttpEntity<Person> request = new HttpEntity<>(unknownPerson);
+		ResponseEntity<Void> response = restTemplate
+				.withBasicAuth("admin", "admin123")
+				.exchange("/persons/99999", HttpMethod.PUT, request, Void.class);
+		assertThat(response.getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+	}
+
 }
